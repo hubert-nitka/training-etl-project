@@ -1,0 +1,32 @@
+# ========== PYTHON ==========
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# ========== ENV ==========
+.venv/
+venv/
+ENV/
+
+# ========== DATA ==========
+data/
+*.json
+
+# ========== LOGI ==========
+logs/
+*.log
+
+# ========== SEKRETY ==========
+.env
+*.env
+
+# ========== IDE ==========
+.vscode/
+.idea/
+*.swp
+
+# ========== SYSTEM ==========
+.DS_Store
+Thumbs.db

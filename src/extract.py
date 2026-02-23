@@ -7,7 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from config import LOGIN_SITE, TRAINING_SITE
-from utils import parse_rest_time, log
+from src.utils import parse_rest_time, log
 
 def scrape_training_plan(email, password):
     options = webdriver.ChromeOptions()
@@ -150,7 +150,7 @@ def scrape_training_plan(email, password):
 
                         exercise_data = {
                             "exercise": exercise_name,
-                            "warm_up_sets": warm_up_sets,
+                            "warmup_sets": warm_up_sets,
                             "working_sets": working_sets,
                             "reps": reps,
                             "rest_between_sets": rest_between_sets,
@@ -164,7 +164,7 @@ def scrape_training_plan(email, password):
                         last_exercise = exercise_data
 
                     except Exception as e:
-                        log("Exercise error:", e)
+                        log(f"Exercise error: {e}", level="ERROR")
 
                 # ==========================
                 # IF REST BETWEEN EXERCISES
@@ -183,7 +183,7 @@ def scrape_training_plan(email, password):
                             last_exercise["rest_after_exercise_max"] = rest_max
                             
                     except Exception as e:
-                        log(f"Error processing rest card: {e}")
+                        log(f"Error processing rest card: {e}", level="ERROR")
 
             log(f"Saved {len(day_exercises)} exercises")
 

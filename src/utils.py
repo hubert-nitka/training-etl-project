@@ -1,7 +1,9 @@
+import psycopg
 from datetime import datetime
 from config import LOG_PATH
 
-def log(message, echo=False):
+
+def log(message, level="INFO", echo=False):
     """
     Write a timestamped message to the log file and optionally print it.
 
@@ -13,10 +15,10 @@ def log(message, echo=False):
     timestamp = datetime.utcnow()
 
     with open(LOG_PATH, 'a', encoding='utf-8') as f:
-        f.write(f'{timestamp} UTC: {message}\n')
+        f.write(f'{timestamp} UTC: [{level}] {message}\n')
 
     if echo is True:
-        print(f'{timestamp} UTC: {message}\n')
+        print(f'{timestamp} UTC: [{level}] {message}\n')
 
 def parse_rest_time(rest_string):
     """
@@ -43,3 +45,10 @@ def parse_rest_time(rest_string):
             return (val, val)
         except ValueError:
             return (None, None)
+
+def connect_to_database(host, db_name, user, password="", port="5432"):
+    
+    conn = psycopg.connect(f"host={host} port={port} dbname={db_name} user={user} password={password}")
+    cur = conn.cursor()
+
+    return(conn,cur)
