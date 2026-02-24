@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # File paths
 JSON_PATH = Path(os.getenv('JSON_PATH', str(BASE_DIR / "./data/training_plan.json")))
 LOG_PATH = Path(os.getenv('LOG_PATH', str(BASE_DIR / "./log/log.log")))
+WORKOUT_XLSX_PATH = Path(os.getenv('WORKOUT_XLSX_PATH', str(BASE_DIR / "./workout/")))
 
 # Login data
 WEB_USERNAME = os.getenv('WEB_USERNAME')

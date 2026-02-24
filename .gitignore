@@ -13,6 +13,8 @@ ENV/
 # ========== DATA ==========
 data/
 *.json
+workout
+*.xlsx
 
 # ========== LOGI ==========
 logs/

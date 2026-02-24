@@ -6,12 +6,26 @@ from src.utils import connect_to_database, log
 
 def save_to_database(json_file, plan_name, start_date):
     
-    conn,cur = connect_to_database(DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT)
+    conn, cur = connect_to_database()
 
     with open(json_file, 'r', encoding='utf-8') as f:
         training_plan = json.load(f)
 
     try:
+        # Check if current plan already exists:
+
+        cur.execute("""
+            SELECT plan_id
+            FROM training_plans
+            WHERE plan_name = %s
+        """,(plan_name,))
+
+        result = cur.fetchone()
+
+        if result:
+            log(f"Plan: '{plan_name}' already exists in database (plan_id={result[0]}). Aborting load process.", level="ERROR", echo=True)
+            return
+
         # Create new training plan
         cur.execute("""
             INSERT INTO training_plans (plan_name, start_date, end_date) 
@@ -24,8 +38,12 @@ def save_to_database(json_file, plan_name, start_date):
 
         day_mapping = {
             "Day 1": "Monday",
+            "Day 2": "Tuesday",
             "Day 3": "Wednesday",
-            "Day 5": "Friday"
+            "Day 4": "Thursday",
+            "Day 5": "Friday",
+            "Day 6": "Saturday",
+            "Day 7": "Sunday"
         }
 
         for day_key, exercises in training_plan.items():
@@ -94,7 +112,7 @@ def save_to_database(json_file, plan_name, start_date):
 
     except Exception as e:
         conn.rollback()
-        log(f"Error loading plan '{plan_name}' to database", level="ERROR")
+        log(f"Error loading plan '{plan_name}' to database", level="ERROR", echo=True)
         raise
     
     finally:

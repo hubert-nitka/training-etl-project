@@ -1,37 +1,90 @@
 import json
 from datetime import date
-from config import WEB_USERNAME, WEB_PASSWORD, JSON_PATH
+from config import WEB_USERNAME, WEB_PASSWORD, JSON_PATH, WORKOUT_XLSX_PATH
 from src.extract import scrape_training_plan
-from src.utils import log
+from src.utils import log, clear_screen
+from src.ui import plan_selector, workout_day_selector
 from src.load import save_to_database
+from src.genxlsx import generate_workout_excel
 
 if __name__ == "__main__":
 
-    log("=" * 80)
-    log("SCRAPING PROCESS STARTED")
-    log("=" * 80)
+    today = date.today()
 
-    training_plan = scrape_training_plan(
-        WEB_USERNAME, WEB_PASSWORD
-    )
+    while True:
 
-    log("Saving results to JSON")
+        clear_screen()
+        print("1. Gather this months training plan and import it to db")
+        print("2. Generate workout excel file")
+        print("0. Quit")
+        choice = input("Enter choice: ")
 
-    with open(JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(training_plan, f, ensure_ascii=False, indent=2)
+        match choice:
+            case "1":
+                clear_screen()
+                log("=" * 80)
+                log("SCRAPING PROCESS STARTED", echo=True)
+                log("=" * 80)
 
-    log(f"Plan saved to: {JSON_PATH}")
+                training_plan = scrape_training_plan(
+                    WEB_USERNAME, WEB_PASSWORD
+                )
 
-    log("=" * 80)
-    log("SCRAPING PROCESS ENDED")
-    log("=" * 80)
+                log("Saving results to JSON")
+
+                with open(JSON_PATH, "w", encoding="utf-8") as f:
+                    json.dump(training_plan, f, ensure_ascii=False, indent=2)
+
+                log(f"Plan saved to: {JSON_PATH}")
+
+                log("=" * 80)
+                log("SCRAPING PROCESS ENDED", echo=True)
+                log("=" * 80)
+                log("=" * 80)
+                log("LOADING PROCESS STARTED", echo=True)
+                log("=" * 80)
+
+                save_to_database(json_file=JSON_PATH, plan_name=today.strftime("%B %Y"), start_date=today)
+
+                log("=" * 80)
+                log("LOADING PROCESS ENDED", echo=True)
+                log("=" * 80)
+
+                print("\n" + "=" * 80)
+                print("Data gathered and imported successfuly")
+                print("=" * 80 + "\n")
+                input("Press Enter to continue...")
+            
+            case "2":
+
+                result = plan_selector()
+
+                if result is not None:
+
+                    plan_id, plan_name = result
+                    day = workout_day_selector(plan_id, plan_name)
+
+                    if day is not None:
+
+                        clean_file_name = f"workout_{plan_name}_{day}.xlsx".replace(" ", "_").lower()
+                        output_file = WORKOUT_XLSX_PATH / clean_file_name
+
+                        generate_workout_excel(
+                            plan_name=plan_name,
+                            day_of_week=day,
+                            output_file=output_file
+                        )
+
+                        print("\n" + "=" * 80)
+                        print("Excel file generated")
+                        print("=" * 80 + "\n")
+                        break
+
+            case "0":
+                break
+
+            case _:
+                print("Invalid choice! Please select one of the menu options by number.")
+                input("Press Enter to continue...")
     
-    log("=" * 80)
-    log("LOADING PROCESS STARTED")
-    log("=" * 80)
 
-    save_to_database(json_file=JSON_PATH, plan_name="Luty 2025", start_date=date(2025, 2, 1))
-
-    log("=" * 80)
-    log("LOADING PROCESS ENDED")
-    log("=" * 80)

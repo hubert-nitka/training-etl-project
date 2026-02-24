@@ -1,6 +1,7 @@
 import psycopg
+import os
 from datetime import datetime
-from config import LOG_PATH
+from config import DB_NAME, DB_USER, DB_PASSWORD, DB_PORT, DB_HOST, LOG_PATH
 
 
 def log(message, level="INFO", echo=False):
@@ -19,6 +20,15 @@ def log(message, level="INFO", echo=False):
 
     if echo is True:
         print(f'{timestamp} UTC: [{level}] {message}\n')
+
+def clear_screen():
+    """
+        Clears CLI window
+    """
+    if os.name == 'nt':
+        os.system('cls')
+    else:
+        os.system('clear')
 
 def parse_rest_time(rest_string):
     """
@@ -46,9 +56,30 @@ def parse_rest_time(rest_string):
         except ValueError:
             return (None, None)
 
-def connect_to_database(host, db_name, user, password="", port="5432"):
-    
-    conn = psycopg.connect(f"host={host} port={port} dbname={db_name} user={user} password={password}")
-    cur = conn.cursor()
+import psycopg
+from sqlalchemy import create_engine
 
-    return(conn,cur)
+def connect_to_database(return_cursor=True, return_engine=False):
+    """
+    Connects to DB
+    return_cursor: True = returns (conn, cur), False = returns only conn
+    return_engine: True = returns also SQLAlchemy engine for pandas
+    """
+
+    conn = psycopg.connect(f"host={DB_HOST} port={DB_PORT or '5432'} dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD or ''}")
+    
+    engine = None
+    if return_engine:
+        connection_string = f"postgresql://{DB_USER}:{DB_PASSWORD or ''}@{DB_HOST}:{DB_PORT or '5432'}/{DB_NAME}"
+        engine = create_engine(connection_string)
+    
+    if return_cursor:
+        if return_engine:
+            return conn, conn.cursor(), engine
+        else:
+            return conn, conn.cursor()
+    else:
+        if return_engine:
+            return conn, engine
+        else:
+            return conn
