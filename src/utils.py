@@ -1,7 +1,9 @@
 import psycopg
 import os
-from datetime import datetime
+from datetime import datetime, date
 from config import DB_NAME, DB_USER, DB_PASSWORD, DB_PORT, DB_HOST, LOG_PATH
+import psycopg
+from sqlalchemy import create_engine
 
 
 def log(message, level="INFO", echo=False):
@@ -56,8 +58,7 @@ def parse_rest_time(rest_string):
         except ValueError:
             return (None, None)
 
-import psycopg
-from sqlalchemy import create_engine
+
 
 def connect_to_database(return_cursor=True, return_engine=False):
     """
@@ -83,3 +84,22 @@ def connect_to_database(return_cursor=True, return_engine=False):
             return conn, engine
         else:
             return conn
+
+def get_session_date_from_user():
+    """
+    Gets session date from user, default is today's date (YYYY-MM-DD)
+    """
+    default_date = date.today()
+    
+    default_str = default_date.strftime("%Y-%m-%d")
+    
+    user_input = input(f"\nWorkout session date [{default_str}]: ").strip()
+    
+    if not user_input:
+        return default_date
+    
+    try:
+        return datetime.strptime(user_input, "%Y-%m-%d").date()
+    except ValueError:
+        print(f"Wrong format. Use YYYY-MM-DD")
+        return None

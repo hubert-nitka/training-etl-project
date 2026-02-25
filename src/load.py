@@ -3,7 +3,12 @@ Load data gathered by webscraper from Training portal into database
 """
 
 import json
+import pandas as pd
+from datetime import datetime, date
+from pathlib import Path
+from sqlalchemy import text
 from src.utils import connect_to_database, log
+from src.ui import workout_day_selector
 
 # ============================================
 # HELPER FUNCTIONS
@@ -17,6 +22,27 @@ def plan_exists(cur, plan_name):
         SELECT plan_id FROM training_plans WHERE plan_name = %s
     """, (plan_name,))
     return cur.fetchone()
+
+import pandas as pd
+
+def count_checked_checkboxes(df, exercise_index):
+    """
+    Counts completed sets for specified exercise
+    """
+    
+    exercise_row = df.iloc[exercise_index]
+    
+    # Get only checkbox columns ( starting with ✓)
+    checkbox_cols = [col for col in df.columns if col.startswith('✓')]
+    
+    if not checkbox_cols:
+        # Fallback: count all ☑ symbols in the row
+        return (exercise_row == '☑').sum()
+    
+    # Count checked boxes only in checkbox columns
+    checked_count = sum(1 for col in checkbox_cols if exercise_row[col] == '☑')
+    
+    return checked_count
 
 def create_new_plan(cur, plan_name, start_date):
 
@@ -33,8 +59,11 @@ def create_new_plan(cur, plan_name, start_date):
 def get_or_create_exercise(cur, exercise_name):
 
     """Gets exercise ID or creates new exercise if it doesn't exist"""
+
     cur.execute("""
-        SELECT exercise_id FROM exercises WHERE exercise_name = %s
+        SELECT exercise_id 
+        FROM exercises 
+        WHERE exercise_name = %s
     """, (exercise_name,))
 
     result = cur.fetchone()
@@ -80,6 +109,20 @@ def insert_plan_exercise(cur, plan_id, day_of_week, exercise_data):
         exercise_data.get('rest_after_exercise_max')
     ))
 
+def get_plan_id(engine, plan_name):
+    """
+    Gets plan_id for given plan_name
+    """
+
+    query = text("""
+        SELECT plan_id
+        FROM training_plans
+        WHERE plan_name = :plan_name
+    """)
+
+    with engine.connect() as conn:
+        return conn.execute(query, {"plan_name": plan_name}).scalar()
+
 def log_exercise_added(exercise_name, exercise_data):
 
     """Logs information about added exercise"""
@@ -92,6 +135,54 @@ def log_exercise_added(exercise_name, exercise_data):
 # ============================================
 # MID-LEVEL FUNCTIONS
 # ============================================
+
+def create_workout_session(engine, plan_id, session_date, day_of_week):
+    """
+    Creates new workout session in DB and returns it's session_id
+    """
+
+    # Check if session already exists
+
+    query = f"""
+            SELECT session_id
+            FROM workout_sessions
+            WHERE plan_id = %s
+            AND session_date = %s
+            AND day_of_week = %s
+        """
+    
+
+    session_df = pd.DataFrame([{
+        'plan_id': plan_id,
+        'session_date': session_date,
+        'day_of_week': day_of_week
+    }])
+    
+    session_df.to_sql(
+        'workout_sessions',
+        engine,
+        if_exists='append',
+        index=False
+    )
+    
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT session_id 
+                FROM workout_sessions 
+                WHERE plan_id = :plan_id 
+                AND session_date = :session_date
+                AND day_of_week = :day_of_week
+            """),
+            {
+                "plan_id": plan_id,
+                "session_date": session_date,
+                "day_of_week": day_of_week
+            }
+        )
+        session_id = result.scalar()
+    
+    return session_id
 
 def process_single_exercise(cur, plan_id, day_of_week, exercise):
 
@@ -137,7 +228,7 @@ def process_day(cur, plan_id, day_key, day_exercises, day_mapping):
 # MAIN FUNCTION
 # ============================================
 
-def save_to_database(json_file, plan_name, start_date):
+def save_plan_to_database(json_file, plan_name, start_date):
 
     """
     Saves training plan from JSON file to database
@@ -196,3 +287,25 @@ def save_to_database(json_file, plan_name, start_date):
     finally:
         cur.close()
         conn.close()
+
+def save_workout_to_database(workout_file):
+    conn, engine = connect_to_database(return_cursor=False, return_engine=True)
+    df = pd.read_excel(workout_file)
+    sets = count_checked_checkboxes(df,1)
+    print(df)
+    print(f"\nReps: {sets}")
+    workout_path = Path(workout_file)
+    parts = workout_path.stem.split("_")
+    plan_name = f"{parts[1].title()} {parts[2]}"
+    print(plan_name)
+    plan_id = get_plan_id(engine, plan_name)
+    
+    print(f"Plan id: {plan_id}")
+    """
+    day_of_week = day = parts[3].title()
+    print(f"Day: {day_of_week}")
+    conn.close()
+    session_date = workout_day_selector()
+    print(session_date)
+    session_id = create_workout_session(engine, plan_id, session_date, day_of_week)
+    """
