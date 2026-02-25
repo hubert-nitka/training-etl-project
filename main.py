@@ -21,6 +21,7 @@ if __name__ == "__main__":
 
         match choice:
             case "1":
+                """
                 clear_screen()
                 log("=" * 80)
                 log("SCRAPING PROCESS STARTED", echo=True)
@@ -39,7 +40,7 @@ if __name__ == "__main__":
 
                 log("=" * 80)
                 log("SCRAPING PROCESS ENDED", echo=True)
-                log("=" * 80)
+                log("=" * 80)"""
                 log("=" * 80)
                 log("LOADING PROCESS STARTED", echo=True)
                 log("=" * 80)

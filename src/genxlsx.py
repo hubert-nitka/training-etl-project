@@ -1,5 +1,5 @@
 """
-Generate workout Excel file with exercises, weights from history, and checkboxes
+Generate workout Excel file with exercises, weights from history, and checkboxes for each set
 """
 import psycopg
 from openpyxl import Workbook
