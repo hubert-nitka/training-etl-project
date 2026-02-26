@@ -11,15 +11,15 @@ from src.genxlsx import generate_workout_excel
 if __name__ == "__main__":
 
     today = date.today()
-    """
+    
     while True:
-
+        
         clear_screen()
         print("1. Gather this months training plan and import it to DB")
         print("2. Generate workout excel file")
         print("3. Import workout day to DB")
         print("0. Quit")
-        choice = input("Enter choice: ").strip()
+        choice = input("\nEnter choice: ").strip()
 
         match choice:
             case "1":
@@ -65,7 +65,7 @@ if __name__ == "__main__":
                 if result is not None:
 
                     plan_id, plan_name = result
-                    day = workout_day_selector(plan_id, plan_name)
+                    day = workout_day_selector_export(plan_id, plan_name)
 
                     if day is not None:
 
@@ -81,30 +81,25 @@ if __name__ == "__main__":
                         print("\n" + "=" * 80)
                         print("Excel file generated")
                         print("=" * 80 + "\n")
-                        break
+                        input("Press Enter to continue...")
 
             case "3":
-                pass
+                workout_file = workout_day_selector_import()
+                clear_screen()
+
+                if workout_file is not None:
+                    print(f"Workout file selected: {workout_file.split("/")[-1]}")
+                    response = input("\nImport workout data to DB? [Y/n]:").strip().lower()
+
+                    if response in ["", "y", "yes"]:
+                        save_workout_to_database(workout_file)
+                    else:
+                        print("\nImport canceled")
+                        input("Press Enter to continue...")
 
             case "0":
                 break
 
             case _:
                 print("Invalid choice! Please select one of the menu options by number.")
-                input("Press Enter to continue...")
-    """
-
-    workout_file = workout_day_selector_import()
-    clear_screen()
-
-    if workout_file is not None:
-        print(f"Workout file selected: {workout_file.split("/")[-1]}")
-        response = input("\nImport workout data to DB? [Y/n]:").strip().lower()
-
-        if response in ["", "y", "yes"]:
-            save_workout_to_database(workout_file)
-        else:
-            print("\nImport canceled")
-            input("Press Enter to continue...")
-
-
+                input("Press Enter to continue...")    

@@ -60,30 +60,16 @@ def parse_rest_time(rest_string):
 
 
 
-def connect_to_database(return_cursor=True, return_engine=False):
+def connect_to_database():
     """
-    Connects to DB
-    return_cursor: True = returns (conn, cur), False = returns only conn
-    return_engine: True = returns also SQLAlchemy engine for pandas
+    Creates and returns SQLAlchemy engine for database connection
     """
-
-    conn = psycopg.connect(f"host={DB_HOST} port={DB_PORT or '5432'} dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD or ''}")
-    
-    engine = None
-    if return_engine:
-        connection_string = f"postgresql://{DB_USER}:{DB_PASSWORD or ''}@{DB_HOST}:{DB_PORT or '5432'}/{DB_NAME}"
-        engine = create_engine(connection_string)
-    
-    if return_cursor:
-        if return_engine:
-            return conn, conn.cursor(), engine
-        else:
-            return conn, conn.cursor()
-    else:
-        if return_engine:
-            return conn, engine
-        else:
-            return conn
+    connection_string = (
+        f"postgresql://{DB_USER}:{DB_PASSWORD or ''}@"
+        f"{DB_HOST}:{DB_PORT or '5432'}/{DB_NAME}"
+    )
+    engine = create_engine(connection_string)
+    return engine
 
 def get_session_date_from_user():
     """

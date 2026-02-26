@@ -1,32 +1,36 @@
 """
 Generate workout Excel file with exercises, weights from history, and checkboxes for each set
 """
-import psycopg
+from sqlalchemy import text
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 import json
 from datetime import date
-from src.utils import connect_to_database
-from config import DB_NAME, DB_USER, DB_PASSWORD, DB_PORT, DB_HOST
+from src.utils import connect_to_database, log
 
-def get_last_weight_used(cur, exercise_id, reps):
+
+def get_last_weight_used(engine, exercise_id, reps):
     """
     Get the last weight used for an exercise with given reps
     Returns the most recent weight from workout history
     """
-    cur.execute("""
-        SELECT se.weight_used, ws.session_date
-        FROM session_exercises se
-        JOIN workout_sessions ws ON se.session_id = ws.session_id
-        WHERE se.exercise_id = %s 
-          AND se.reps_completed = %s
-        ORDER BY ws.session_date DESC, se.set_number DESC
-        LIMIT 1
-    """, (exercise_id, reps))
-    
-    result = cur.fetchone()
-    return result[0] if result else None
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT se.weight_used, ws.session_date
+                FROM session_exercises se
+                JOIN workout_sessions ws ON se.session_id = ws.session_id
+                WHERE se.exercise_id = :exercise_id
+                  AND se.reps_completed = :reps
+                ORDER BY ws.session_date DESC, se.working_set_number DESC
+                LIMIT 1
+            """),
+            {"exercise_id": exercise_id, "reps": reps}
+        )
+        
+        row = result.fetchone()
+        return row[0] if row else None
 
 
 def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
@@ -39,46 +43,50 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         output_file: Output Excel filename
     """
     
-    # Connect to database
-    conn, cur = connect_to_database()
+    engine = connect_to_database()
     
     try:
-        # Get plan_id
-        cur.execute("""
-            SELECT plan_id FROM training_plans WHERE plan_name = %s
-        """, (plan_name,))
-        
-        result = cur.fetchone()
-        if not result:
-            log(f"Plan '{plan_name}' not found!", level="ERROR", echo=True)
-            return
-        
-        plan_id = result[0]
-        
-        # Get exercises for this day
-        cur.execute("""
-            SELECT 
-                e.exercise_id,
-                e.exercise_name,
-                pe.warmup_sets,
-                pe.working_sets,
-                pe.reps,
-                pe.planned_weight,
-                pe.rest_between_sets_min,
-                pe.rest_between_sets_max,
-                pe.rest_after_exercise_min,
-                pe.rest_after_exercise_max
-            FROM plan_exercises pe
-            JOIN exercises e ON pe.exercise_id = e.exercise_id
-            WHERE pe.plan_id = %s AND pe.day_of_week = %s
-            ORDER BY pe.plan_exercise_id
-        """, (plan_id, day_of_week))
-        
-        exercises = cur.fetchall()
-        
-        if not exercises:
-            log(f"No exercises found for {day_of_week} in '{plan_name}'", level="ERROR", echo=True)
-            return
+        with engine.connect() as conn:
+            # Get plan_id
+            result = conn.execute(
+                text("SELECT plan_id FROM training_plans WHERE plan_name = :plan_name"),
+                {"plan_name": plan_name}
+            )
+            
+            row = result.fetchone()
+            if not row:
+                log(f"Plan '{plan_name}' not found!", level="ERROR", echo=True)
+                return
+            
+            plan_id = row[0]
+            
+            # Get exercises for this day
+            result = conn.execute(
+                text("""
+                    SELECT 
+                        e.exercise_id,
+                        e.exercise_name,
+                        pe.warmup_sets,
+                        pe.working_sets,
+                        pe.reps,
+                        pe.planned_weight,
+                        pe.rest_between_sets_min,
+                        pe.rest_between_sets_max,
+                        pe.rest_after_exercise_min,
+                        pe.rest_after_exercise_max
+                    FROM plan_exercises pe
+                    JOIN exercises e ON pe.exercise_id = e.exercise_id
+                    WHERE pe.plan_id = :plan_id AND pe.day_of_week = :day_of_week
+                    ORDER BY pe.plan_exercise_id
+                """),
+                {"plan_id": plan_id, "day_of_week": day_of_week}
+            )
+            
+            exercises = result.fetchall()
+            
+            if not exercises:
+                log(f"No exercises found for {day_of_week} in '{plan_name}'", level="ERROR", echo=True)
+                return
         
         # Create workbook
         wb = Workbook()
@@ -100,13 +108,13 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         )
         
         # Set column widths
-        sheet.column_dimensions['A'].width = 25  # Exercise name
+        sheet.column_dimensions['A'].width = 50  # Exercise name
         sheet.column_dimensions['B'].width = 12  # Weight
-        sheet.column_dimensions['C'].width = 12  # Warmup sets
-        sheet.column_dimensions['D'].width = 12  # Working sets
-        sheet.column_dimensions['E'].width = 12  # Reps
-        sheet.column_dimensions['F'].width = 12  # Rest between sets
-        sheet.column_dimensions['G'].width = 12  # Rest after
+        sheet.column_dimensions['C'].width = 15  # Warmup sets
+        sheet.column_dimensions['D'].width = 15  # Working sets
+        sheet.column_dimensions['E'].width = 15  # Reps
+        sheet.column_dimensions['F'].width = 20  # Rest between sets
+        sheet.column_dimensions['G'].width = 20  # Rest after
         sheet.column_dimensions['H'].width = 10  # Comment
         
         # Add checkboxes columns (one per set)
@@ -119,9 +127,9 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         
         # Header row
         headers = [
-            "Ćwiczenie", "Ciężar", "Serie rozgrzewkowe", 
-            "Serie właściwe", "Powtórzenia", "Przerwa", 
-            "Przerwa po", "Comment"
+            "Exercise", "Weight (kg)", "Warmup sets", 
+            "Working sets", "Reps", "Rest between reps", 
+            "Rest after exercise", "Notes"
         ]
         
         for col_idx, header in enumerate(headers, 1):
@@ -157,7 +165,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
             # Get weight suggestion from history (use first rep count)
             suggested_weight = None
             if reps_list and isinstance(reps_list[0], int):
-                suggested_weight = get_last_weight_used(cur, exercise_id, reps_list[0])
+                suggested_weight = get_last_weight_used(engine, exercise_id, reps_list[0])
             
             # Use suggested weight if available, otherwise use planned_weight
             weight_display = suggested_weight if suggested_weight is not None else (planned_weight if planned_weight else "")
@@ -199,11 +207,10 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         
         # Save workbook
         wb.save(str(output_file))
-        print(f"Workout Excel generated: {output_file}")
-        print(f"Plan: {plan_name}")
-        print(f"Day: {day_of_week}")
-        print(f"Exercises: {len(exercises)}")
+        log(f"Workout Excel generated: {output_file}")
+        log(f"Plan: {plan_name}")
+        log(f"Day: {day_of_week}")
+        log(f"Exercises: {len(exercises)}")
         
     finally:
-        cur.close()
-        conn.close()
+        engine.dispose()
