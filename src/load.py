@@ -331,7 +331,9 @@ def save_workout_to_database(workout_file):
 
             reps_all = row.Reps
             if pd.notna(reps_all):
-                reps = int(str(reps_all).split(',')[0].strip())
+                first_val = str(reps_all).split(',')[0].strip()
+
+                reps = -1 if first_val.lower() == "amrap" else int(first_val)
             else:
                 reps = None
 
