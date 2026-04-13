@@ -181,3 +181,6 @@ ALTER TABLE ONLY public.session_exercises
 
 ALTER TABLE ONLY public.workout_sessions
     ADD CONSTRAINT workout_sessions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.training_plans(plan_id) NOT VALID;
+
+ALTER TABLE ONLY public.plan_exercises
+    ADD CONSTRAINT one_exercise_per_day_per_plan UNIQUE (plan_id, exercise_id, day_of_week);
