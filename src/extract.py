@@ -148,6 +148,17 @@ def scrape_training_plan(email, password):
 
                         rest_min, rest_max = parse_rest_time(rest_between_sets)
 
+                        # trainer note
+
+                        try:
+                            trainer_note = card.find_element(
+                                By.CSS_SELECTOR,
+                                "div[class*='note'] > div[class*='content']"
+                                )
+                            trainer_note = trainer_note.text.strip()
+                        except:
+                            trainer_note = None
+
                         exercise_data = {
                             "exercise": exercise_name,
                             "warmup_sets": warm_up_sets,
@@ -157,7 +168,8 @@ def scrape_training_plan(email, password):
                             "rest_between_sets_min": rest_min,
                             "rest_between_sets_max": rest_max,
                             "rest_after_exercise_min": None,
-                            "rest_after_exercise_max": None
+                            "rest_after_exercise_max": None,
+                            "trainer_note": trainer_note
                         }
 
                         day_exercises.append(exercise_data)

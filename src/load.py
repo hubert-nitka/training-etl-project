@@ -109,14 +109,14 @@ def insert_plan_exercise(engine, plan_id, day_of_week, exercise_data):
                     warmup_sets, working_sets, reps,
                     planned_weight, rest_between_sets_min,
                     rest_between_sets_max, rest_after_exercise_min,
-                    rest_after_exercise_max
+                    rest_after_exercise_max, trainer_note
                 )
                 VALUES (
                     :plan_id, :exercise_id, :day_of_week,
                     :warmup_sets, :working_sets, :reps,
                     NULL, :rest_between_sets_min,
                     :rest_between_sets_max, :rest_after_exercise_min,
-                    :rest_after_exercise_max
+                    :rest_after_exercise_max, trainer_note
                 )
             """),
             {
@@ -129,7 +129,8 @@ def insert_plan_exercise(engine, plan_id, day_of_week, exercise_data):
                 "rest_between_sets_min": exercise_data.get('rest_between_sets_min'),
                 "rest_between_sets_max": exercise_data.get('rest_between_sets_max'),
                 "rest_after_exercise_min": exercise_data.get('rest_after_exercise_min'),
-                "rest_after_exercise_max": exercise_data.get('rest_after_exercise_max')
+                "rest_after_exercise_max": exercise_data.get('rest_after_exercise_max'),
+                "trainer_note": exercise_data.get('trainer_note')
             }
         )
 
@@ -154,6 +155,36 @@ def log_exercise_added(exercise_name, exercise_data):
     working = exercise_data.get('working_sets') or 0
     reps_json = json.dumps(exercise_data.get('reps') or [])
     log(f"{exercise_name}: {warmup} + {working} sets, reps={reps_json} added to plan")
+
+def update_plan_exercise(engine, existing_id, exercise_data):
+    """
+    Updates plan exercise data in plan_exercises DB Table
+    """
+
+    reps_json = json.dumps(exercise_data.get('reps') or [])
+    
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE plan_exercises
+                SET warmup_sets = :warmup_sets, working_sets = :working_sets, reps = :reps,
+                    planned_weight = NULL, rest_between_sets_min = :rest_between_sets_min,
+                    rest_between_sets_max = :rest_between_sets_max, rest_after_exercise_min = :rest_after_exercise_min,
+                    rest_after_exercise_max = :rest_after_exercise_max, trainer_note = :trainer_note
+                WHERE plan_exercise_id = :plan_exercise_id
+            """),
+            {
+                "warmup_sets": exercise_data.get('warmup_sets'),
+                "working_sets": exercise_data.get('working_sets'),
+                "reps": reps_json,
+                "rest_between_sets_min": exercise_data.get('rest_between_sets_min'),
+                "rest_between_sets_max": exercise_data.get('rest_between_sets_max'),
+                "rest_after_exercise_min": exercise_data.get('rest_after_exercise_min'),
+                "rest_after_exercise_max": exercise_data.get('rest_after_exercise_max'),
+                "trainer_note": exercise_data.get('trainer_note'),
+                "plan_exercise_id": existing_id
+            }
+        )
 
 
 # ============================================
@@ -221,12 +252,39 @@ def process_single_exercise(engine, plan_id, day_of_week, exercise):
         'rest_between_sets_min': exercise.get('rest_between_sets_min'),
         'rest_between_sets_max': exercise.get('rest_between_sets_max'),
         'rest_after_exercise_min': exercise.get('rest_after_exercise_min'),
-        'rest_after_exercise_max': exercise.get('rest_after_exercise_max')
+        'rest_after_exercise_max': exercise.get('rest_after_exercise_max'),
+        'trainer_note': exercise.get('trainer_note')
     }
     
-    # Insert into plan
-    insert_plan_exercise(engine, plan_id, day_of_week, exercise_data)
-    log_exercise_added(exercise['exercise'], exercise_data)
+    # Check if exercise already exists for given plan and day of week
+    
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                """
+                SELECT plan_exercise_id
+                FROM plan_exercises
+                WHERE plan_id = :plan_id
+                    AND exercise_id = :exercise_id
+                    AND day_of_week = :day_of_week
+                """
+            ),{
+                "plan_id": plan_id,
+                "exercise_id": exercise_id,
+                "day_of_week": day_of_week
+            }
+        )
+
+    existing_id = result.scalar()
+
+    if existing_id:
+        # Update plan exercise
+        update_plan_exercise(engine, existing_id, exercise_data)
+        log(f"Plan exercise {exercise['exercise']} [id: {existing_id}] Updated")
+    else:
+        # Insert into plan
+        insert_plan_exercise(engine, plan_id, day_of_week, exercise_data)
+        log_exercise_added(exercise['exercise'], exercise_data)
 
 
 def process_day(engine, plan_id, day_key, day_exercises, day_mapping):
@@ -263,13 +321,12 @@ def save_plan_to_database(json_file, plan_name, start_date):
         
         # Check if plan already exists
         if plan_exists(engine, plan_name):
-            log(f"Plan: '{plan_name}' already exists in database. Aborting.",
+            log(f"Plan: '{plan_name}' already exists in database.",
                 level="ERROR", echo=True)
-            return
-        
-        # Create new plan
-        plan_id = create_new_plan(engine, plan_name, start_date)
-        log(f"Created new plan: {plan_name} (ID: {plan_id})")
+            plan_id = get_plan_id(engine, plan_name)
+        else:
+            plan_id = create_new_plan(engine, plan_name, start_date)
+            log(f"Created new plan: {plan_name} (ID: {plan_id})")
         
         # Day mapping dictionary
         day_mapping = {

@@ -48,7 +48,8 @@ CREATE TABLE public.plan_exercises (
     rest_between_sets_min integer,
     rest_between_sets_max integer,
     rest_after_exercise_min integer,
-    rest_after_exercise_max integer
+    rest_after_exercise_max integer,
+    trainer_note text
 );
 
 
@@ -181,3 +182,6 @@ ALTER TABLE ONLY public.session_exercises
 
 ALTER TABLE ONLY public.workout_sessions
     ADD CONSTRAINT workout_sessions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.training_plans(plan_id) NOT VALID;
+
+ALTER TABLE ONLY public.plan_exercises
+    ADD CONSTRAINT one_exercise_per_day_per_plan UNIQUE (plan_id, exercise_id, day_of_week);

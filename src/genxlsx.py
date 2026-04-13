@@ -73,7 +73,8 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
                         pe.rest_between_sets_min,
                         pe.rest_between_sets_max,
                         pe.rest_after_exercise_min,
-                        pe.rest_after_exercise_max
+                        pe.rest_after_exercise_max,
+                        pe.trainer_note
                     FROM plan_exercises pe
                     JOIN exercises e ON pe.exercise_id = e.exercise_id
                     WHERE pe.plan_id = :plan_id AND pe.day_of_week = :day_of_week
@@ -115,21 +116,22 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         sheet.column_dimensions['E'].width = 15  # Reps
         sheet.column_dimensions['F'].width = 20  # Rest between sets
         sheet.column_dimensions['G'].width = 20  # Rest after
-        sheet.column_dimensions['H'].width = 10  # Comment
+        sheet.column_dimensions['H'].width = 50  # Trainer Notes
+        sheet.column_dimensions['I'].width = 10  # Notes
         
         # Add checkboxes columns (one per set)
         max_total_sets = max(
             (ex[2] or 0) + ex[3] for ex in exercises
         )
         for i in range(max_total_sets):
-            col_letter = chr(73 + i)  # Start from column I
+            col_letter = chr(74 + i)  # Start from column I
             sheet.column_dimensions[col_letter].width = 4
         
         # Header row
         headers = [
             "Exercise", "Weight (kg)", "Warmup sets", 
             "Working sets", "Reps", "Rest between reps", 
-            "Rest after exercise", "Notes"
+            "Rest after exercise", "Trainer Notes", "Notes"
         ]
         
         for col_idx, header in enumerate(headers, 1):
@@ -142,7 +144,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         
         # Add checkbox headers
         for i in range(max_total_sets):
-            cell = sheet.cell(row=1, column=9 + i)
+            cell = sheet.cell(row=1, column=10 + i)
             cell.value = "✓"
             cell.font = header_font_white
             cell.fill = header_fill
@@ -155,7 +157,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         for exercise in exercises:
             (exercise_id, exercise_name, warmup_sets, working_sets, 
              reps_json, planned_weight, rest_min, rest_max, 
-             rest_after_min, rest_after_max) = exercise
+             rest_after_min, rest_after_max, trainer_note) = exercise
             
             try:
                 reps_list = json.loads(reps_json) if reps_json else []
@@ -182,9 +184,10 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
             sheet.cell(row=current_row, column=5).value = ", ".join(str(r) for r in reps_list) if reps_list else ""
             sheet.cell(row=current_row, column=6).value = rest_between
             sheet.cell(row=current_row, column=7).value = rest_after
+            sheet.cell(row=current_row, column=8).value = trainer_note
             
             # Add borders
-            for col in range(1, 9):
+            for col in range(1, 10):
                 sheet.cell(row=current_row, column=col).border = thin_border
                 sheet.cell(row=current_row, column=col).alignment = Alignment(vertical="center")
             
@@ -195,7 +198,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
             # Add checkboxes for each set (warmup + working)
             total_sets = (warmup_sets or 0) + working_sets
             for set_num in range(total_sets):
-                checkbox_col = 9 + set_num
+                checkbox_col = 10 + set_num
                 cell = sheet.cell(row=current_row, column=checkbox_col)
                 cell.value = "☐"  # Empty checkbox
                 cell.alignment = center_align
