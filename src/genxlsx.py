@@ -1,13 +1,16 @@
 """
 Generate workout Excel file with exercises, weights from history, and checkboxes for each set
 """
+import os
 from sqlalchemy import text
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 import json
 from datetime import date
 from src.utils import connect_to_database, log
+from config import WORKOUT_XLSX_PATH
 
 
 def get_last_weight_used(engine, exercise_id, reps):
@@ -23,7 +26,7 @@ def get_last_weight_used(engine, exercise_id, reps):
                 JOIN workout_sessions ws ON se.session_id = ws.session_id
                 WHERE se.exercise_id = :exercise_id
                   AND se.reps_completed = :reps
-                ORDER BY ws.session_date DESC, se.working_set_number DESC
+                ORDER BY ws.session_date DESC
                 LIMIT 1
             """),
             {"exercise_id": exercise_id, "reps": reps}
@@ -31,6 +34,13 @@ def get_last_weight_used(engine, exercise_id, reps):
         
         row = result.fetchone()
         return row[0] if row else None
+    
+def get_weight_for_reps(engine, exercise_id, reps):
+    if isinstance(reps, int):
+        return get_last_weight_used(engine, exercise_id, reps)
+    else:
+        # AMRAP
+        return get_last_weight_used(engine, exercise_id, -1)
 
 
 def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
@@ -69,7 +79,6 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
                         pe.warmup_sets,
                         pe.working_sets,
                         pe.reps,
-                        pe.planned_weight,
                         pe.rest_between_sets_min,
                         pe.rest_between_sets_max,
                         pe.rest_after_exercise_min,
@@ -108,31 +117,45 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
             bottom=Side(style='thin')
         )
         
-        # Set column widths
-        sheet.column_dimensions['A'].width = 50  # Exercise name
-        sheet.column_dimensions['B'].width = 12  # Weight
-        sheet.column_dimensions['C'].width = 15  # Warmup sets
-        sheet.column_dimensions['D'].width = 15  # Working sets
-        sheet.column_dimensions['E'].width = 15  # Reps
-        sheet.column_dimensions['F'].width = 20  # Rest between sets
-        sheet.column_dimensions['G'].width = 20  # Rest after
-        sheet.column_dimensions['H'].width = 50  # Trainer Notes
-        sheet.column_dimensions['I'].width = 10  # Notes
         
+        
+        # Check for max weight columns needed
+
+        max_weight_cols = max(
+            len(json.loads(ex[4])) if ex[4] else 1
+            for ex in exercises
+        )
+
         # Add checkboxes columns (one per set)
         max_total_sets = max(
             (ex[2] or 0) + ex[3] for ex in exercises
         )
-        for i in range(max_total_sets):
-            col_letter = chr(74 + i)  # Start from column I
-            sheet.column_dimensions[col_letter].width = 4
-        
+
         # Header row
         headers = [
-            "Exercise", "Weight (kg)", "Warmup sets", 
-            "Working sets", "Reps", "Rest between reps", 
-            "Rest after exercise", "Trainer Notes", "Notes"
+            "Exercise"
+            ] + [f"W{i+1} (kg)" for i in range(max_weight_cols)] + [
+            "Warmup sets", "Working sets", "Reps", "Rest between reps", 
+            "Rest after exercise", "Trainer note", "Notes"
         ]
+
+        checkbox_start_col = len(headers) + 1
+        for i in range(max_total_sets):
+            col_letter = get_column_letter(checkbox_start_col + i)
+            sheet.column_dimensions[col_letter].width = 4
+
+        # Set column widths
+        for i in range(len(headers)):
+            col_letter = get_column_letter(i + 1)
+            
+            if headers[i] == "Exercise":
+                sheet.column_dimensions[col_letter].width = 50
+            elif "W" in headers[i]:
+                sheet.column_dimensions[col_letter].width = 10
+            else:
+                sheet.column_dimensions[col_letter].width = 18
+    
+        col_map = {name: idx+1 for idx, name in enumerate(headers)}
         
         for col_idx, header in enumerate(headers, 1):
             cell = sheet.cell(row=1, column=col_idx)
@@ -144,7 +167,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         
         # Add checkbox headers
         for i in range(max_total_sets):
-            cell = sheet.cell(row=1, column=10 + i)
+            cell = sheet.cell(row=1, column=checkbox_start_col + i)
             cell.value = "✓"
             cell.font = header_font_white
             cell.fill = header_fill
@@ -156,7 +179,7 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
         
         for exercise in exercises:
             (exercise_id, exercise_name, warmup_sets, working_sets, 
-             reps_json, planned_weight, rest_min, rest_max, 
+             reps_json, rest_min, rest_max, 
              rest_after_min, rest_after_max, trainer_note) = exercise
             
             try:
@@ -164,41 +187,46 @@ def generate_workout_excel(plan_name, day_of_week, output_file="workout.xlsx"):
             except (json.JSONDecodeError, TypeError):
                 reps_list = []
             
-            # Get weight suggestion from history (use first rep count)
-            suggested_weight = None
-            if reps_list and isinstance(reps_list[0], int):
-                suggested_weight = get_last_weight_used(engine, exercise_id, reps_list[0])
-            
-            # Use suggested weight if available, otherwise use planned_weight
-            weight_display = suggested_weight if suggested_weight is not None else (planned_weight if planned_weight else "")
+            # Check for descending series and get weight suggestion from history (use first rep count)
+            if len(set(reps_list)) == 1:
+                weight_display = [get_weight_for_reps(engine, exercise_id, reps_list[0]) or ""]
+            else:
+                weight_display = [
+                    get_weight_for_reps(engine, exercise_id, reps) or ""
+                    for reps in reps_list
+                ]
             
             # Format rest times
             rest_between = f"{rest_min}-{rest_max}" if rest_min and rest_max and rest_min != rest_max else str(rest_min) if rest_min else ""
             rest_after = f"{rest_after_min}-{rest_after_max}" if rest_after_min and rest_after_max and rest_after_min != rest_after_max else str(rest_after_min) if rest_after_min else ""
             
             # Add exercise row
-            sheet.cell(row=current_row, column=1).value = exercise_name
-            sheet.cell(row=current_row, column=2).value = weight_display
-            sheet.cell(row=current_row, column=3).value = warmup_sets or 0
-            sheet.cell(row=current_row, column=4).value = working_sets
-            sheet.cell(row=current_row, column=5).value = ", ".join(str(r) for r in reps_list) if reps_list else ""
-            sheet.cell(row=current_row, column=6).value = rest_between
-            sheet.cell(row=current_row, column=7).value = rest_after
-            sheet.cell(row=current_row, column=8).value = trainer_note
+            sheet.cell(row=current_row, column=col_map['Exercise']).value = exercise_name
+            for i in range(max_weight_cols):
+                col_name = f"W{i+1} (kg)"
+                value = weight_display[i] if i < len(weight_display) else ""
+                sheet.cell(row=current_row, column=col_map[col_name]).value = value
+            sheet.cell(row=current_row, column=col_map['Warmup sets']).value = warmup_sets or 0
+            sheet.cell(row=current_row, column=col_map['Working sets']).value = working_sets
+            sheet.cell(row=current_row, column=col_map['Reps']).value = ", ".join(str(r) for r in reps_list) if reps_list else ""
+            sheet.cell(row=current_row, column=col_map['Rest between reps']).value = rest_between
+            sheet.cell(row=current_row, column=col_map['Rest after exercise']).value = rest_after
+            sheet.cell(row=current_row, column=col_map['Trainer note']).value = trainer_note
             
             # Add borders
-            for col in range(1, 10):
+            for col in range(1, len(headers) + 1):
                 sheet.cell(row=current_row, column=col).border = thin_border
                 sheet.cell(row=current_row, column=col).alignment = Alignment(vertical="center")
             
             # Center align numeric columns
-            for col in [2, 3, 4, 6, 7]:
-                sheet.cell(row=current_row, column=col).alignment = center_align
+            for col_name, col_idx in col_map.items():
+                if "W" in col_name or col_name in ["Warmup sets", "Working sets"]:
+                    sheet.cell(row=current_row, column=col_idx).alignment = center_align
             
             # Add checkboxes for each set (warmup + working)
             total_sets = (warmup_sets or 0) + working_sets
             for set_num in range(total_sets):
-                checkbox_col = 10 + set_num
+                checkbox_col = checkbox_start_col + set_num
                 cell = sheet.cell(row=current_row, column=checkbox_col)
                 cell.value = "☐"  # Empty checkbox
                 cell.alignment = center_align

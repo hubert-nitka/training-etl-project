@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import date
 from config import WEB_USERNAME, WEB_PASSWORD, JSON_PATH, WORKOUT_XLSX_PATH
 from src.extract import scrape_training_plan
@@ -34,6 +35,8 @@ if __name__ == "__main__":
                 )
 
                 log("Saving results to JSON")
+
+                os.makedirs(os.path.dirname(JSON_PATH), exist_ok=True)
 
                 with open(JSON_PATH, "w", encoding="utf-8") as f:
                     json.dump(training_plan, f, ensure_ascii=False, indent=2)
