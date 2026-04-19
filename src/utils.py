@@ -16,6 +16,7 @@ def log(message, level="INFO", echo=False):
     """
 
     timestamp = datetime.utcnow()
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 
     with open(LOG_PATH, 'a', encoding='utf-8') as f:
         f.write(f'{timestamp} UTC: [{level}] {message}\n')

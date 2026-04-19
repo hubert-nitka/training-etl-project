@@ -44,7 +44,6 @@ CREATE TABLE public.plan_exercises (
     warmup_sets integer,
     working_sets integer NOT NULL,
     reps text NOT NULL,
-    planned_weight numeric(5,2),
     rest_between_sets_min integer,
     rest_between_sets_max integer,
     rest_after_exercise_min integer,
