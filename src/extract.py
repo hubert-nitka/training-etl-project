@@ -24,11 +24,11 @@ def scrape_training_plan(email, password):
 
         driver.get(LOGIN_SITE)
 
-        wait.until(EC.presence_of_element_located((By.NAME, "email")))
+        wait.until(EC.presence_of_element_located((By.ID, "email")))
 
-        driver.find_element(By.NAME, "email").send_keys(email)
-        driver.find_element(By.NAME, "password").send_keys(password)
-        driver.find_element(By.CLASS_NAME, "submit").click()
+        driver.find_element(By.ID, "email").send_keys(email)
+        driver.find_element(By.ID, "password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, "button[class*='button']").click()
 
         time.sleep(3)
 
@@ -188,12 +188,12 @@ def scrape_training_plan(email, password):
                     try:
                         time_elem = card.find_element(By.CSS_SELECTOR, "div[class*='time']:not([class*='timer'])")
                         rest_text = driver.execute_script("return arguments[0].textContent;", time_elem).strip()
-                        
+
                         if rest_text:
                             rest_min, rest_max = parse_rest_time(rest_text + " sek.")
                             last_exercise["rest_after_exercise_min"] = rest_min
                             last_exercise["rest_after_exercise_max"] = rest_max
-                            
+
                     except Exception as e:
                         log(f"Error processing rest card: {e}", level="ERROR")
 

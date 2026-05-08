@@ -113,7 +113,7 @@ def insert_plan_exercise(engine, plan_id, day_of_week, exercise_data):
                     :plan_id, :exercise_id, :day_of_week,
                     :warmup_sets, :working_sets, :reps, :rest_between_sets_min,
                     :rest_between_sets_max, :rest_after_exercise_min,
-                    :rest_after_exercise_max, trainer_note
+                    :rest_after_exercise_max, :trainer_note
                 )
             """),
             {
